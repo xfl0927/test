@@ -1,0 +1,198 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+    PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+    "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.rbac.dao.RoleDAO">
+
+
+    <sql id="roleColumns">
+        ${alias}.id,
+        ${alias}.`code`,
+        ${alias}.role_name as roleName,
+        ${alias}.created_time as createdTime,
+        ${alias}.created_by as createdBy,
+        ${alias}.operated_time as operatedTime,
+        ${alias}.operated_by as operatedBy,
+        ${alias}.version,
+        ${alias}.deleted
+    </sql>
+
+
+    <select id="findById" resultType="RolePO">
+        select
+            <include refid="roleColumns"><property name="alias" value="t"/></include>
+        from role t
+        <where>
+            and t.deleted=0
+            and t.id = #{arg0}
+        </where>
+        limit 1
+    </select>
+
+    <select id="exist" resultType="boolean">
+        select count(1) from role
+        <where>
+            and deleted=0
+            and id = #{arg0}
+        </where>
+    </select>
+
+    <insert id="_save" useGeneratedKeys="true" keyProperty="id" parameterType="RolePO">
+        insert into role(
+        id,
+        `code`,
+        role_name,
+        created_time,
+        created_by,
+        operated_time,
+        operated_by,
+        version,
+        deleted
+        ) VALUES (
+        #{id,jdbcType=BIGINT},
+        #{code,jdbcType=VARCHAR},
+        #{roleName,jdbcType=VARCHAR},
+        #{createdTime,jdbcType=TIMESTAMP},
+        #{createdBy,jdbcType=VARCHAR},
+        #{operatedTime,jdbcType=TIMESTAMP},
+        #{operatedBy,jdbcType=VARCHAR},
+        #{version,jdbcType=INTEGER},
+        #{deleted,jdbcType=BOOLEAN}
+        )
+    </insert>
+
+
+    <update id="_update" parameterType="RolePO">
+        update role set
+            `code`=#{code,jdbcType=VARCHAR},
+            role_name=#{roleName,jdbcType=VARCHAR},
+            operated_time=#{operatedTime,jdbcType=TIMESTAMP},
+            operated_by=#{operatedBy,jdbcType=VARCHAR},
+            version = version+1,
+            deleted=#{deleted,jdbcType=BOOLEAN}
+        where id=#{id,jdbcType=BIGINT}
+        and version=#{version,jdbcType=INTEGER}
+        and deleted=0
+    </update>
+
+    <delete id="delete">
+        update role set deleted=1
+        where id=#{arg0,jdbcType=BIGINT}
+        and deleted=0
+    </delete>
+
+
+    <sql id="queryCondition">
+        <if test="code != null and code !='' ">
+            and t.`code` = #{code}
+        </if>
+        <if test="roleName != null and roleName !='' ">
+            <bind name="roleName_pattern" value="'%' + roleName + '%'" />
+            and t.role_name like #{roleName_pattern}
+        </if>
+    </sql>
+
+    <sql id="orderCondition">
+        order by
+        <if test="createdTimeSortSign != null and createdTimeSortSign!=0">
+            t.created_time <if test="createdTimeSortSign > 0">asc</if><if test="createdTimeSortSign &lt; 0">desc</if>,
+        </if>
+        <if test="operatedTimeSortSign != null and operatedTimeSortSign!=0">
+            t.operated_time <if test="operatedTimeSortSign > 0">asc</if><if test="operatedTimeSortSign &lt; 0">desc</if>,
+        </if>
+            t.operated_time desc
+    </sql>
+
+    <select id="findCountByQuery" parameterType="RoleQO" resultType="int">
+        select count(1) from role t
+        <where>
+            and t.deleted=0
+        <include refid="queryCondition"/>
+        </where>
+    </select>
+
+    <select id="findListByQuery" parameterType="RoleQO" resultType="RoleListVO">
+        select
+            <include refid="roleColumns"><property name="alias" value="t"/></include>
+        from role t
+        <where>
+            and t.deleted=0
+        <include refid="queryCondition"/>
+        </where>
+        <include refid="orderCondition"/>
+        limit #{startIndex},#{pageSize}
+    </select>
+
+    <select id="findOptions" parameterType="OptionQO" resultType="OptionVO">
+        select
+            t.id as `key`,
+            t.role_name as `value`
+        from role t
+        <where>
+            and t.deleted=0
+            <if test="lastKey != null">
+                and t.id > #{lastKey}
+            </if>
+            <if test="matchValue != null and matchValue !='' ">
+                <bind name="matchValue_pattern" value="'%' + matchValue + '%'" />
+                and t.role_name like #{matchValue_pattern}
+            </if>
+        </where>
+        order by t.id asc
+        limit #{limit}
+    </select>
+
+    <select id="getCountByResource" parameterType="Integer" resultType="int">
+        select count(1)
+        from role t
+        inner join r_role_resource r
+            on t.id=r.role_id
+        where
+            r.resource_id=#{arg0}
+            and t.deleted=0
+    </select>
+
+    <insert id="addResource" parameterType="map">
+        insert into r_role_resource(
+            role_id,
+            resource_id,
+            created_time
+        )values(
+            #{roleId,jdbcType=BIGINT},
+            #{resourceId,jdbcType=INTEGER},
+            now()
+        )
+    </insert>
+
+    <delete id="removeResource" parameterType="map">
+        delete from r_role_resource
+        where role_id=#{roleId,jdbcType=BIGINT} and resource_id in
+        <foreach collection="resourceId" item="_id" open="(" separator="," close=")">
+            #{_id}
+        </foreach>
+    </delete>
+
+    <delete id="removeAllResource">
+        delete from r_role_resource
+        where role_id=#{arg0}
+    </delete>
+
+    <select id="findByUser" parameterType="Long" resultType="RolePO">
+        select
+            <include refid="roleColumns"><property name="alias" value="t"/></include>
+        from role t
+        inner join r_user_role r
+            on t.id=r.role_id
+        where
+            r.user_id=#{arg0}
+            and t.deleted=0
+        order by
+            r.id
+    </select>
+
+
+
+    <!-- 以上是自动生成的代码，尽量不要手动修改，新的sql请写在本行注释以下区域 -->
+
+
+</mapper>

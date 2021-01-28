@@ -1,0 +1,229 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+    PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+    "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.rbac.dao.UserDAO">
+
+
+    <sql id="userColumns">
+        ${alias}.id,
+        ${alias}.age as ss,
+        ${alias}.username,
+        ${alias}.nickname,
+        ${alias}.sex,
+        ${alias}.dept_id as deptId,
+        ${alias}.created_time as createdTime,
+        ${alias}.created_by as createdBy,
+        ${alias}.operated_time as operatedTime,
+        ${alias}.operated_by as operatedBy,
+        ${alias}.version,
+        ${alias}.deleted
+    </sql>
+
+
+    <select id="findById" resultType="UserPO">
+        select
+            <include refid="userColumns"><property name="alias" value="t"/></include>
+        from `user` t
+        <where>
+            and t.deleted=0
+            and t.id = #{arg0}
+        </where>
+        limit 1
+    </select>
+
+    <select id="exist" resultType="boolean">
+        select count(1) from `user`
+        <where>
+            and deleted=0
+            and id = #{arg0}
+        </where>
+    </select>
+
+    <insert id="_save" useGeneratedKeys="true" keyProperty="id" parameterType="UserPO">
+        insert into `user`(
+        id,
+        age,
+        username,
+        nickname,
+        sex,
+        dept_id,
+        created_time,
+        created_by,
+        operated_time,
+        operated_by,
+        version,
+        deleted
+        ) VALUES (
+        #{id,jdbcType=BIGINT},
+        #{ss,jdbcType=VARCHAR},
+        #{username,jdbcType=VARCHAR},
+        #{nickname,jdbcType=VARCHAR},
+        #{sex,jdbcType=INTEGER},
+        #{deptId,jdbcType=INTEGER},
+        #{createdTime,jdbcType=TIMESTAMP},
+        #{createdBy,jdbcType=VARCHAR},
+        #{operatedTime,jdbcType=TIMESTAMP},
+        #{operatedBy,jdbcType=VARCHAR},
+        #{version,jdbcType=INTEGER},
+        #{deleted,jdbcType=BOOLEAN}
+        )
+    </insert>
+
+
+    <update id="_update" parameterType="UserPO">
+        update `user` set
+            age=#{ss,jdbcType=VARCHAR},
+            username=#{username,jdbcType=VARCHAR},
+            nickname=#{nickname,jdbcType=VARCHAR},
+            sex=#{sex,jdbcType=INTEGER},
+            dept_id=#{deptId,jdbcType=INTEGER},
+            operated_time=#{operatedTime,jdbcType=TIMESTAMP},
+            operated_by=#{operatedBy,jdbcType=VARCHAR},
+            version = version+1,
+            deleted=#{deleted,jdbcType=BOOLEAN}
+        where id=#{id,jdbcType=BIGINT}
+        and version=#{version,jdbcType=INTEGER}
+        and deleted=0
+    </update>
+
+    <delete id="delete">
+        update `user` set deleted=1
+        where id=#{arg0,jdbcType=BIGINT}
+        and deleted=0
+    </delete>
+
+
+    <sql id="queryCondition">
+        <if test="ss != null and ss !='' ">
+            and t.age = #{ss}
+        </if>
+        <if test="username != null and username !='' ">
+            <bind name="username_pattern" value="'%' + username + '%'" />
+            and t.username like #{username_pattern}
+        </if>
+        <if test="nickname != null and nickname !='' ">
+            <bind name="nickname_pattern" value="'%' + nickname + '%'" />
+            and t.nickname like #{nickname_pattern}
+        </if>
+        <if test="sex != null and sex.size() >0 ">
+            and t.sex in
+            <foreach collection="sex" item="_value" open="(" separator="," close=")">
+            #{_value}
+            </foreach>
+        </if>
+        <if test="deptId != null and deptId.size() >0 ">
+            and t.dept_id in
+            <foreach collection="deptId" item="_value" open="(" separator="," close=")">
+            #{_value}
+            </foreach>
+        </if>
+        <bind name="role_code_con_ex" value="roleCode != null and roleCode !='' " />
+        <if test="role_code_con_ex ">
+            and exists(
+                select 1 from role m1
+                inner join r_user_role r1
+                    on m1.id=r1.role_id
+                where r1.user_id=t.id
+                and m1.deleted=0
+            <if test="role_code_con_ex">
+                and m1.`code` = #{roleCode}
+            </if>
+            )
+        </if>
+    </sql>
+
+    <sql id="orderCondition">
+        order by
+        <if test="ssSortSign != null and ssSortSign!=0">
+            t.age <if test="ssSortSign > 0">asc</if><if test="ssSortSign &lt; 0">desc</if>,
+        </if>
+        <if test="createdTimeSortSign != null and createdTimeSortSign!=0">
+            t.created_time <if test="createdTimeSortSign > 0">asc</if><if test="createdTimeSortSign &lt; 0">desc</if>,
+        </if>
+        <if test="operatedTimeSortSign != null and operatedTimeSortSign!=0">
+            t.operated_time <if test="operatedTimeSortSign > 0">asc</if><if test="operatedTimeSortSign &lt; 0">desc</if>,
+        </if>
+            t.operated_time desc
+    </sql>
+
+    <select id="findCountByQuery" parameterType="UserQO" resultType="int">
+        select count(1) from `user` t
+        <where>
+            and t.deleted=0
+        <include refid="queryCondition"/>
+        </where>
+    </select>
+
+    <select id="findListByQuery" parameterType="UserQO" resultType="UserListVO">
+        select
+            <include refid="userColumns"><property name="alias" value="t"/></include>
+        from `user` t
+        <where>
+            and t.deleted=0
+        <include refid="queryCondition"/>
+        </where>
+        <include refid="orderCondition"/>
+        limit #{startIndex},#{pageSize}
+    </select>
+
+    <select id="getCountByDeptId" parameterType="Integer" resultType="int">
+        select count(1)
+        from `user` t
+        where
+            t.dept_id=#{arg0}
+            and t.deleted=0
+    </select>
+
+    <select id="getCountByRole" parameterType="Long" resultType="int">
+        select count(1)
+        from `user` t
+        inner join r_user_role r
+            on t.id=r.user_id
+        where
+            r.role_id=#{arg0}
+            and t.deleted=0
+    </select>
+
+    <insert id="addRole" parameterType="map">
+        insert into r_user_role(
+            user_id,
+            role_id,
+            created_time
+        )values(
+            #{userId,jdbcType=BIGINT},
+            #{roleId,jdbcType=BIGINT},
+            now()
+        )
+    </insert>
+
+    <delete id="removeRole" parameterType="map">
+        delete from r_user_role
+        where user_id=#{userId,jdbcType=BIGINT} and role_id in
+        <foreach collection="roleId" item="_id" open="(" separator="," close=")">
+            #{_id}
+        </foreach>
+    </delete>
+
+    <delete id="removeAllRole">
+        delete from r_user_role
+        where user_id=#{arg0}
+    </delete>
+
+    <select id="notUnique" resultType="boolean">
+        select count(1) from `user` t
+        <where>
+            and t.deleted=0
+            and t.username = #{username}
+        <if test="id != null  ">
+            and t.id != #{id}
+        </if>
+        </where>
+    </select>
+
+
+
+    <!-- 以上是自动生成的代码，尽量不要手动修改，新的sql请写在本行注释以下区域 -->
+
+
+</mapper>

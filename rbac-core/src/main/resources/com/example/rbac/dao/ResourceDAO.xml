@@ -1,0 +1,190 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+    PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+    "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.rbac.dao.ResourceDAO">
+
+
+    <sql id="resourceColumns">
+        ${alias}.id,
+        ${alias}.res_code as resCode,
+        ${alias}.res_name as resName,
+        ${alias}.res_type as resType,
+        ${alias}.order_no as orderNo,
+        ${alias}.created_time as createdTime,
+        ${alias}.created_by as createdBy,
+        ${alias}.operated_time as operatedTime,
+        ${alias}.operated_by as operatedBy,
+        ${alias}.version,
+        ${alias}.deleted
+    </sql>
+
+
+    <select id="findById" resultType="ResourcePO">
+        select
+            <include refid="resourceColumns"><property name="alias" value="t"/></include>
+        from resource t
+        <where>
+            and t.deleted=0
+            and t.id = #{arg0}
+        </where>
+        limit 1
+    </select>
+
+    <select id="exist" resultType="boolean">
+        select count(1) from resource
+        <where>
+            and deleted=0
+            and id = #{arg0}
+        </where>
+    </select>
+
+    <insert id="_save" useGeneratedKeys="true" keyProperty="id" parameterType="ResourcePO">
+        insert into resource(
+        id,
+        res_code,
+        res_name,
+        res_type,
+        order_no,
+        created_time,
+        created_by,
+        operated_time,
+        operated_by,
+        version,
+        deleted
+        ) VALUES (
+        #{id,jdbcType=INTEGER},
+        #{resCode,jdbcType=VARCHAR},
+        #{resName,jdbcType=VARCHAR},
+        #{resType,jdbcType=INTEGER},
+        #{orderNo,jdbcType=INTEGER},
+        #{createdTime,jdbcType=TIMESTAMP},
+        #{createdBy,jdbcType=VARCHAR},
+        #{operatedTime,jdbcType=TIMESTAMP},
+        #{operatedBy,jdbcType=VARCHAR},
+        #{version,jdbcType=INTEGER},
+        #{deleted,jdbcType=BOOLEAN}
+        )
+    </insert>
+
+
+    <update id="_update" parameterType="ResourcePO">
+        update resource set
+            res_code=#{resCode,jdbcType=VARCHAR},
+            res_name=#{resName,jdbcType=VARCHAR},
+            res_type=#{resType,jdbcType=INTEGER},
+            order_no=#{orderNo,jdbcType=INTEGER},
+            operated_time=#{operatedTime,jdbcType=TIMESTAMP},
+            operated_by=#{operatedBy,jdbcType=VARCHAR},
+            version = version+1,
+            deleted=#{deleted,jdbcType=BOOLEAN}
+        where id=#{id,jdbcType=INTEGER}
+        and version=#{version,jdbcType=INTEGER}
+        and deleted=0
+    </update>
+
+    <delete id="delete">
+        update resource set deleted=1
+        where id=#{arg0,jdbcType=INTEGER}
+        and deleted=0
+    </delete>
+
+
+    <sql id="queryCondition">
+        <if test="resCode != null and resCode !='' ">
+            and t.res_code = #{resCode}
+        </if>
+        <if test="resName != null and resName !='' ">
+            <bind name="resName_pattern" value="'%' + resName + '%'" />
+            and t.res_name like #{resName_pattern}
+        </if>
+        <if test="resType != null ">
+            and t.res_type = #{resType}
+        </if>
+        <bind name="code_con_ex" value="code != null and code !='' " />
+        <if test="code_con_ex ">
+            and exists(
+                select 1 from role m1
+                inner join r_role_resource r1
+                    on m1.id=r1.role_id
+                where r1.resource_id=t.id
+                and m1.deleted=0
+            <if test="code_con_ex">
+                and m1.`code` = #{code}
+            </if>
+            )
+        </if>
+    </sql>
+
+    <sql id="orderCondition">
+        order by
+        <if test="orderNoSortSign != null and orderNoSortSign!=0">
+            t.order_no <if test="orderNoSortSign > 0">asc</if><if test="orderNoSortSign &lt; 0">desc</if>,
+        </if>
+        <if test="createdTimeSortSign != null and createdTimeSortSign!=0">
+            t.created_time <if test="createdTimeSortSign > 0">asc</if><if test="createdTimeSortSign &lt; 0">desc</if>,
+        </if>
+        <if test="operatedTimeSortSign != null and operatedTimeSortSign!=0">
+            t.operated_time <if test="operatedTimeSortSign > 0">asc</if><if test="operatedTimeSortSign &lt; 0">desc</if>,
+        </if>
+            t.operated_time desc
+    </sql>
+
+    <select id="findCountByQuery" parameterType="ResourceQO" resultType="int">
+        select count(1) from resource t
+        <where>
+            and t.deleted=0
+        <include refid="queryCondition"/>
+        </where>
+    </select>
+
+    <select id="findListByQuery" parameterType="ResourceQO" resultType="ResourceListVO">
+        select
+            <include refid="resourceColumns"><property name="alias" value="t"/></include>
+        from resource t
+        <where>
+            and t.deleted=0
+        <include refid="queryCondition"/>
+        </where>
+        <include refid="orderCondition"/>
+        limit #{startIndex},#{pageSize}
+    </select>
+
+    <select id="findOptions" parameterType="OptionQO" resultType="OptionVO">
+        select
+            t.id as `key`,
+            t.res_name as `value`
+        from resource t
+        <where>
+            and t.deleted=0
+            <if test="lastKey != null">
+                and t.id > #{lastKey}
+            </if>
+            <if test="matchValue != null and matchValue !='' ">
+                <bind name="matchValue_pattern" value="'%' + matchValue + '%'" />
+                and t.res_name like #{matchValue_pattern}
+            </if>
+        </where>
+        order by t.id asc
+        limit #{limit}
+    </select>
+
+    <select id="findByRole" parameterType="Long" resultType="ResourcePO">
+        select
+            <include refid="resourceColumns"><property name="alias" value="t"/></include>
+        from resource t
+        inner join r_role_resource r
+            on t.id=r.resource_id
+        where
+            r.role_id=#{arg0}
+            and t.deleted=0
+        order by
+            r.id
+    </select>
+
+
+
+    <!-- 以上是自动生成的代码，尽量不要手动修改，新的sql请写在本行注释以下区域 -->
+
+
+</mapper>
